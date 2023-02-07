@@ -1,15 +1,14 @@
 import logging
 import os
-import time
-
 import sys
+import time
+from http import HTTPStatus
+
 import requests
 import telegram
 from dotenv import load_dotenv
 
 from exceptions import RequestError, StatusCodeError
-
-from http import HTTPStatus
 
 load_dotenv()
 
@@ -40,6 +39,8 @@ def send_message(bot, message):
     logging.debug(f'Начало отправки сообщения в Telegram, текст "{message}"')
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
+        # Не придумала, как вынести так, чтобы только
+        # в случае успешной отправки запись делалась :(
         logging.debug(f'Бот отправил сообщение "{message}"')
     except telegram.error.TelegramError as error:
         logging.error(
@@ -122,27 +123,28 @@ def main():
         )
         logging.critical(message)
         sys.exit(message)
-    bot = telegram.Bot(token=TELEGRAM_TOKEN)
 
+    bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
     while True:
         try:
             response = get_api_answer(timestamp)
             check_response(response)
-            homework = response.get('homeworks')
 
+            homework = response.get('homeworks')
             if len(homework) == 0:
-                logging.debug('Обновлений нет.')
+                message = 'Обновлений нет.'
+                logging.debug(message, exc_info=True)
             else:
-                homework_status = parse_status(homework[0])
-                send_message(bot, homework_status)
+                message = parse_status(homework[0])
 
             timestamp = response.get('current_date')
 
         except Exception as error:
-            logging.error(f'Сбой в работе программы: {error}', exc_info=True)
-            send_message(bot, error)
+            message = f'Сбой в работе программы: {error}'
+            logging.error(message, exc_info=True)
 
+        send_message(bot, message)
         time.sleep(RETRY_PERIOD)
 
 

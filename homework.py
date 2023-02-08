@@ -39,33 +39,37 @@ def send_message(bot, message):
     logging.debug(f'Начало отправки сообщения в Telegram, текст "{message}"')
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
-        # Не придумала, как вынести так, чтобы только
-        # в случае успешной отправки запись делалась :(
-        logging.debug(f'Бот отправил сообщение "{message}"')
     except telegram.error.TelegramError as error:
         logging.error(
             f'Бот не смог отправить сообщение "{message}". {error}',
             exc_info=True
         )
+    else:
+        logging.debug(f'Бот отправил сообщение "{message}"')
 
 
 def get_api_answer(timestamp):
     """Делает запрос к эндпоинту API-сервиса Практикум.Домашка."""
     logging.debug('Начало запроса к API')
+    PARAMS = {'from_date': timestamp}
     try:
         response = requests.get(
             ENDPOINT,
             headers=HEADERS,
-            params={'from_date': timestamp}
+            params=PARAMS
         )
     except requests.RequestException as error:
-        raise RequestError(f'Эндпоинт {response.url} недоступен. {error}')
+        raise RequestError(
+            f'Эндпоинт {ENDPOINT} недоступен.'
+            f'Параметры запроса:'
+            f'headers - {HEADERS}, params - {PARAMS}. {error}'
+        )
 
     if response.status_code != HTTPStatus.OK:
         raise StatusCodeError(
-            f'Эндпоинт {response.url} недоступен.'
+            f'Запрос {response.url} не успешен, поэтому грустный.'
             f'Код ответа API: {response.status_code}.'
-            f'Текст ответа API: {response.text}.'
+            f'Параметры запроса: headers - {HEADERS}, params - {PARAMS}.'
         )
 
     return response.json()
@@ -126,17 +130,18 @@ def main():
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
+    last_message = ''
     while True:
         try:
             response = get_api_answer(timestamp)
             check_response(response)
 
-            homework = response.get('homeworks')
-            if len(homework) == 0:
+            homeworks = response.get('homeworks')
+            if not homeworks:
                 message = 'Обновлений нет.'
                 logging.debug(message, exc_info=True)
             else:
-                message = parse_status(homework[0])
+                message = parse_status(homeworks[0])
 
             timestamp = response.get('current_date')
 
@@ -144,7 +149,10 @@ def main():
             message = f'Сбой в работе программы: {error}'
             logging.error(message, exc_info=True)
 
-        send_message(bot, message)
+        if last_message != message:
+            send_message(bot, message)
+            last_message = message
+
         time.sleep(RETRY_PERIOD)
 
 

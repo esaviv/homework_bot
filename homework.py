@@ -51,25 +51,26 @@ def send_message(bot, message):
 def get_api_answer(timestamp):
     """Делает запрос к эндпоинту API-сервиса Практикум.Домашка."""
     logging.debug('Начало запроса к API')
-    PARAMS = {'from_date': timestamp}
+    params = {'from_date': timestamp}
     try:
         response = requests.get(
             ENDPOINT,
             headers=HEADERS,
-            params=PARAMS
+            params=params
         )
     except requests.RequestException as error:
         raise RequestError(
             f'Эндпоинт {ENDPOINT} недоступен.'
             f'Параметры запроса:'
-            f'headers - {HEADERS}, params - {PARAMS}. {error}'
+            f'headers - {HEADERS}, params - {params}. {error}'
         )
 
     if response.status_code != HTTPStatus.OK:
         raise StatusCodeError(
             f'Запрос {response.url} не успешен, поэтому грустный.'
             f'Код ответа API: {response.status_code}.'
-            f'Параметры запроса: headers - {HEADERS}, params - {PARAMS}.'
+            f'Текст ответа API: {response.text}.'
+            f'Параметры запроса: headers - {HEADERS}, params - {params}.'
         )
 
     return response.json()
@@ -138,7 +139,7 @@ def main():
 
             homeworks = response.get('homeworks')
             if not homeworks:
-                message = 'Обновлений нет.'
+                message = 'Список работ за запрошенный период пустой.'
                 logging.debug(message, exc_info=True)
             else:
                 message = parse_status(homeworks[0])
@@ -152,6 +153,8 @@ def main():
         if last_message != message:
             send_message(bot, message)
             last_message = message
+        else:
+            logging.debug('Новых статусов нет.')
 
         time.sleep(RETRY_PERIOD)
 
